@@ -92,3 +92,15 @@ agent 需要具备**接管你已登录浏览器**的能力（例如通过 Chrome
   `You do not have a valid enrollment appointment at this time`——这是正常的，
   说明脚本点击成功、系统按计划拒绝。等到开放时间运行即可。
 - 脚本只做**购物车页内的勾选 + 点击**，不会删除课程、不会改动其他页面。
+
+---
+
+## 五、Credits
+
+- **enroll.js** 派生自 [AnsonCheng03/CUSIS-Auto-Reg](https://github.com/AnsonCheng03/CUSIS-Auto-Reg)
+  （2022，`script.js`）。本仓库在其基础上做了兼容性与可靠性修复：
+  - 移除对已不存在的 Details 链接的依赖（2026+ CUSIS 页面结构变化）
+  - Enroll 点击增加元素检查与异常处理（原版可能静默失败）
+  - 兼容 SPA 购物车页（`NUI_FRAMEWORK` URL），原版仅支持经典页
+  - 日志改为英文单行浮层，时间参数调整为 50ms 轮询 + 80ms 缓冲
+- **validate.js** 为原创实现，无外部代码引用。
