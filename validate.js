@@ -1,6 +1,7 @@
 (function () {
   // ===== Log overlay: fixed at the bottom of the screen =====
-  let overlay = document.getElementById("validate-log-overlay");
+  // Shared with enroll.js (same id) so running both scripts does not stack two overlays
+  let overlay = document.getElementById("log-overlay");
   if (!overlay) {
     overlay = document.createElement("div");
     overlay.style.position = "fixed";
@@ -12,10 +13,9 @@
     overlay.style.backgroundColor = "rgba(128, 128, 128, 0.7)";
     overlay.style.color = "#fff";
     overlay.style.fontSize = "16px";
-    overlay.style.textAlign = "right";
     overlay.style.padding = "5px";
     overlay.style.zIndex = "1000";
-    overlay.id = "validate-log-overlay";
+    overlay.id = "log-overlay";
     document.body.appendChild(overlay);
   }
   overlay.style.textAlign = "center"; // Apply on every run, even when reusing the overlay
