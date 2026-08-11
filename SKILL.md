@@ -14,10 +14,10 @@ agent 的职责是：**进入正确的页面 → 注入脚本 → 处理对话�
 
 | 文件 | 作用 | 对话框 |
 |---|---|---|
-| `~/cuhk-tools/enroll.js` | 到点自动点击 Enroll（抢课） | `prompt` 要选课时间 |
-| `~/cuhk-tools/validate.js` | 验证购物车课程资格 | 无（可能 `confirm` 跳转） |
+| `./enroll.js` | 到点自动点击 Enroll（抢课） | `prompt` 要选课时间 |
+| `./validate.js` | 验证购物车课程资格 | 无（可能 `confirm` 跳转） |
 
-两者都渲染一个贴地浮层（`#log-overlay` / `#validate-log-overlay`），单行显示
+两者共用同一个贴地浮层（`#log-overlay`，validate.js 复用同 id 防叠层），单行显示
 最新状态，日志同时打到 console。
 
 ## 前置检查（必须）
@@ -66,7 +66,7 @@ mcporter call chrome-devtools.select_page pageId=N   # 选 Shopping Cart 页
 # 2. 注入脚本 —— 关键：去掉 IIFE 包装，改为函数声明
 python3 - <<'EOF'
 import json, os, subprocess, shlex
-js = open(os.path.expanduser('~/cuhk-tools/enroll.js')).read()
+js = open('enroll.js').read()  # cwd 须为 cusis-auto 仓库根目录
 body = js.strip()
 assert body.startswith('(function () {') and body.endswith('})();')
 inner = body[len('(function () {'):-len('})();')]

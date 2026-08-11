@@ -51,8 +51,8 @@
 如果你用 AI agent（如 Claude Code、Codex、Hermes）操作浏览器，把脚本文件路径
 交给 agent，并告诉它下面这句话即可：
 
-> 帮我在 CUSIS 购物车页跑 `~/cuhk-tools/cusis-auto/validate.js`，跑完报告浮层日志。
-> （或：帮我在购物车页跑 `~/cuhk-tools/cusis-auto/enroll.js`，选课时间设为 `2026-08-10 10:00:00`。）
+> 帮我在 CUSIS 购物车页跑 `./validate.js`，跑完报告浮层日志。
+> （或：帮我在购物车页跑 `./enroll.js`，选课时间设为 `2026-08-10 10:00:00`。）
 
 agent 需要具备**接管你已登录浏览器**的能力（例如通过 Chrome DevTools 协议连接
 正在运行的 Chrome）。它应该：
