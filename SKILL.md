@@ -17,7 +17,7 @@ agent 的职责是：**进入正确的页面 → 注入脚本 → 处理对话�
 | `scripts/enroll.js` | 到点自动点击 Enroll（抢课） | `prompt` 要选课时间 |
 | `scripts/validate.js` | 验证购物车课程资格 | 无（可能 `confirm` 跳转） |
 
-两者共用同一个贴地浮层（`#log-overlay`，validate.js 复用同 id 防叠层），单行显示
+两者共用同一个贴地浮层（`#log-overlay`，validate.js 复用同 ID 防叠层），单行显示
 最新状态，日志同时打到 console。
 
 ## 前置检查（必须）
@@ -36,7 +36,7 @@ agent 的职责是：**进入正确的页面 → 注入脚本 → 处理对话�
      可能耗时 10~30s，`mcporter call` 首次超时是正常的，重试即可
 2. **用户 Chrome 已开启调试**：`chrome://inspect/#remote-debugging` → Enable
    （成功标志：`~/Library/Application Support/Google/Chrome/DevToolsActivePort`
-   存在且含端口 + ws 路径）。若卡 "starting..."：Cmd+Q 完全退出 Chrome 重开
+   存在且含端口 + ws 路径）。若卡 「starting...」：Cmd+Q 完全退出 Chrome 重开
 3. **页面必须是购物车页**：
    ```js
    document.title.indexOf("Shopping Cart") > -1 &&
@@ -46,7 +46,7 @@ agent 的职责是：**进入正确的页面 → 注入脚本 → 处理对话�
      判断**看 title + DOM，别看 URL**
    - **空购物车没有 checkbox/按钮**——先让用户加课，别跑脚本
 4. **单会话**：确认没有第二个浏览器登录 CUSIS（多会话会锁定选课功能，
-   报 "Restricted Multiple Login Error"）。若用户之前出过此错误，提示重启
+   报 「Restricted Multiple Login Error」）。若用户之前出过此错误，提示重启
    浏览器重新登录。
 5. 若未登录：走 CUSIS 登录（ADFS → Duo 2FA 需用户手机批准），**只能用一个
    浏览器会话**。
@@ -100,7 +100,7 @@ EOF
 
 prompt 对话框在 AppleScript 下会阻塞——需要用户手动输入时间。
 
-## 验证（必须做，别只汇报"已注入"）
+## 验证（必须做，别只汇报「已注入」）
 
 1. **读取浮层日志**：
    ```js
