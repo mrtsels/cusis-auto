@@ -4,8 +4,8 @@
 
 | 脚本 | 用途 | 时机 |
 |---|---|---|
-| `enroll.js` | 到点**自动点击 Enroll** 提交选课（抢课） | 选课开放那一刻 |
-| `validate.js` | **验证**购物车内课程的选课资格（先修课、时间冲突等） | 随时 |
+| `scripts/enroll.js` | 到点**自动点击 Enroll** 提交选课（抢课） | 选课开放那一刻 |
+| `scripts/validate.js` | **验证**购物车内课程的选课资格（先修课、时间冲突等） | 随时 |
 
 - 零依赖：不需要安装任何东西，复制粘贴即可运行
 - 不处理登录：在已登录 CUSIS 的浏览器里运行，天然绕过 2FA
@@ -24,7 +24,7 @@
 
 1. 进入 CUSIS → Manage Classes → Shopping Cart
 2. 打开开发者工具（Mac: `Cmd+Opt+I`，Windows: `F12`）→ Console 标签
-3. 把 `validate.js` 的**全部内容**粘贴进去，按回车
+3. 把 `scripts/validate.js` 的**全部内容**粘贴进去，按回车
 4. 观察屏幕底部浮层：
    - `Selected 1 course(s). Newly selected: 1.` —— 已勾选课程
    - `The script clicks the Validate button. The page returns the result.` —— 已提交验证
@@ -33,7 +33,7 @@
 ### enroll.js（到点自动抢课）
 
 1. 进入购物车页（同上）
-2. 打开 Console，粘贴 `enroll.js` 全部内容，回车
+2. 打开 Console，粘贴 `scripts/enroll.js` 全部内容，回车
 3. 弹出对话框，输入**选课开放的时间**，格式：`2026-08-10 10:00:00`（本地时间）
    - 也可以直接点确定，接受默认值（当前时间 + 2 分钟）
 4. 脚本自动勾选全部课程，然后高频轮询等待：
@@ -51,8 +51,8 @@
 如果你用 AI agent（如 Claude Code、Codex、Hermes）操作浏览器，把脚本文件路径
 交给 agent，并告诉它下面这句话即可：
 
-> 帮我在 CUSIS 购物车页跑 `./validate.js`，跑完报告浮层日志。
-> （或：帮我在购物车页跑 `./enroll.js`，选课时间设为 `2026-08-10 10:00:00`。）
+> 帮我在 CUSIS 购物车页跑 `scripts/validate.js`，跑完报告浮层日志。
+> （或：帮我在购物车页跑 `scripts/enroll.js`，选课时间设为 `2026-08-10 10:00:00`。）
 
 agent 需要具备**接管你已登录浏览器**的能力（例如通过 Chrome DevTools 协议连接
 正在运行的 Chrome）。它应该：
