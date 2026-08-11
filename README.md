@@ -57,7 +57,7 @@
 agent 需要具备**接管你已登录浏览器**的能力（例如通过 Chrome DevTools 协议连接
 正在运行的 Chrome）。它应该：
 
-1. 确认当前页面是购物车页（标题含 "Shopping Cart" 且有 `.ps-checkbox` 元素）
+1. 确认当前页面是购物车页（标题含 「Shopping Cart」 且有 `.ps-checkbox` 元素）
 2. 把脚本作为函数注入页面执行（去掉外层 `(function(){...})()` 包装，改为
    `function run(){...}` 再传给 evaluate）
 3. 处理脚本里的 `prompt` 对话框（agent 工具通常支持 `dialogAction` 参数传值）
@@ -71,7 +71,7 @@ agent 需要具备**接管你已登录浏览器**的能力（例如通过 Chrome
 
 | 参数 | 值 | 说明 |
 |---|---|---|
-| 轮询间隔 | 50 ms | 检测"是否到点"的频率 |
+| 轮询间隔 | 50 ms | 检测「是否到点」的频率 |
 | 到点缓冲 | 80 ms | 检测到到点后，再多等 80ms 才点击 |
 
 **为什么要有缓冲**：浏览器本地时钟通常比标准时间快几十毫秒（NTP 同步的固有
@@ -87,7 +87,7 @@ agent 需要具备**接管你已登录浏览器**的能力（例如通过 Chrome
 ## 四、注意事项
 
 - **不要同时开两个浏览器登录 CUSIS**：系统检测到多会话会锁定选课功能
-  （"Restricted Multiple Login Error"）。出现后重启浏览器重新登录即可解除。
+  （「Restricted Multiple Login Error」）。出现后重启浏览器重新登录即可解除。
 - **空购物车不工作**：先往购物车加课，再跑脚本。
 - **选课未开放时点 Enroll**：系统返回
   `You do not have a valid enrollment appointment at this time`——这是正常的，
