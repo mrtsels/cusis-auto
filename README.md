@@ -26,8 +26,8 @@
 2. 打开开发者工具（Mac: `Cmd+Opt+I`，Windows: `F12`）→ Console 标签
 3. 把 `validate.js` 的**全部内容**粘贴进去，按回车
 4. 观察屏幕底部浮层：
-   - `Selected 1 course(s).` —— 已勾选课程
-   - `The script clicks the Validate button.` —— 已提交验证
+   - `Selected 1 course(s). Newly selected: 1.` —— 已勾选课程
+   - `The script clicks the Validate button. The page returns the result.` —— 已提交验证
    - 页面返回 `Okay to Add` = 课程可以加入课表；返回错误信息 = 有未满足条件
 
 ### enroll.js（到点自动抢课）
@@ -51,8 +51,8 @@
 如果你用 AI agent（如 Claude Code、Codex、Hermes）操作浏览器，把脚本文件路径
 交给 agent，并告诉它下面这句话即可：
 
-> 帮我在 CUSIS 购物车页跑 `~/cuhk-tools/validate.js`，跑完报告浮层日志。
-> （或：帮我在购物车页跑 `~/cuhk-tools/enroll.js`，选课时间设为 `2026-08-10 10:00:00`。）
+> 帮我在 CUSIS 购物车页跑 `~/cuhk-tools/cusis-auto/validate.js`，跑完报告浮层日志。
+> （或：帮我在购物车页跑 `~/cuhk-tools/cusis-auto/enroll.js`，选课时间设为 `2026-08-10 10:00:00`。）
 
 agent 需要具备**接管你已登录浏览器**的能力（例如通过 Chrome DevTools 协议连接
 正在运行的 Chrome）。它应该：
@@ -78,8 +78,9 @@ agent 需要具备**接管你已登录浏览器**的能力（例如通过 Chrome
 偏移）。80ms 缓冲确保点击**严格发生在真实到点之后**，不会因为本地时钟偏快而
 提前点击（提前点击 = 选课窗口未开，白点一次）。
 
-实测：设定 12:24:30 到点，实际请求发出 12:24:30.102（+102ms，含 50ms 轮询
-滞后和 80ms 缓冲），落在理论区间 [80, 130]ms 内，不提前、无多余抖动。
+实测：设定 12:24:30 到点，实际请求发出 12:24:30.102（+102ms，含轮询滞后
+实测约 22ms（上界 50ms）和 80ms 缓冲），落在理论区间 [80, 130]ms 内，
+不提前、无多余抖动。
 
 ---
 
