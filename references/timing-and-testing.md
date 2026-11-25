@@ -1,77 +1,51 @@
-# CUSIS 计时与测试实测数据（2026-08）
+# CUSIS 计时与测试
 
-本文件记录 enroll.js/validate.js 在真实 CUSIS 环境下的实测数据，供校准参数与
-复现测试时参考。
+## 调度与校时
 
-## 时间偏差测量（系统时钟 vs NTP）
+本机与 CUSIS 共用香港天文台授时，`enroll.js` 将**预约开放时间 + 3 ms** 换算成单调时钟上的截止点。单调时钟用于计时，系统改时间时它会继续向前运行。到达截止点后，脚本复核系统时间和购物车状态，再点击 Enroll 一次。
 
-用 `sntp -sS <server>` 多次采样（NTP 亚毫秒级精度，比 HTTP Date 头可靠）：
+macOS 可用 `sntp stdtime.gov.hk` 只读复核本机时钟偏差。记录采样时间、原始输出及工具提供的往返延迟和测量不确定度。比较历史读数时，统一用「本机减参考时钟」表示偏差，正数表示本机快。 [香港天文台授时服务](https://www.hko.gov.hk/en/nts/ntime.htm) · [NTPv4 规范](https://www.rfc-editor.org/rfc/rfc5905.html#section-8)
 
-| NTP 源 | 偏差（本地 - NTP） |
-|---|---|
-| time.apple.com ×3 | +0.068 / +0.069 / +0.067 s |
-| time.google.com | +0.046 s |
-| time.nist.gov | +0.042 s |
-| hk.pool.ntp.org | +0.048 s |
+## 本地测试
 
-**结论：系统时钟稳定偏快约 40~70ms**，取保守上界 70ms 作为缓冲设计值。
+在仓库根目录用 Node.js 运行回归测试。测试使用模拟页面和时钟，覆盖经典页、SPA、异步准备、无效输入、重复粘贴、切到后台、时钟跳变和控件失效。
 
-关键点：
-- macOS NTP 配置在 `/etc/ntp.conf`（本机为 `server stdtime.gov.hk`，
-  香港天文台，与学校同源）
-- `sntp -sS` 报 "Operation not permitted" 是正常的——只是不能写时钟，
-  偏移值仍有效
-- 本机 NTP 流量被透明代理劫持（stdtime.gov.hk 解析到 198.18.0.9 保留段），
-  但系统时间仍准——不要因为代理而怀疑系统时间本身
-
-## HTTP Date 头不可用于精确校准
-
-- 服务器 Date 头是**秒级精度**（如 `04:18:59.000Z`），单次采样误差 ±500ms，
-  比 NTP 偏差还大
-- 可能被 CDN/代理改写（Apple 服务器 Date 头曾显示偏差 198s，实为代理假象）
-- 同源 fetch 校准（`fetch(origin).headers.get("date")`）只能粗校，
-  多次采样取 min 可逼近，但精度仍受秒级截断限制
-
-## 计时参数推导
-
-```
-安全条件：缓冲 > 系统偏差(70ms) + 轮询滞后 + 余量
+```sh
+node --test tests/enroll.test.js
 ```
 
-| 配置 | click 最早 | click 最晚 | 余量 |
-|---|---|---|---|
-| 60ms 轮询 + 100ms 缓冲（原版） | +100ms | +160ms | 30ms |
-| **50ms 轮询 + 80ms 缓冲（定稿）** | **+80ms** | **+130ms** | 10ms |
-| 10ms 轮询 + 80ms 缓冲 | +80ms | +90ms | 10ms（但 setInterval 后台被节流，名义 10ms 实际 ~50ms） |
+### 3 ms 缓冲
 
-**为什么不用 10ms 轮询**：浏览器后台标签页 setInterval 被节流，标称 10ms
-实测 avg 49.7ms / max 94.7ms——名义值与 50ms 无差别，还更耗 CPU。
+本机 Chrome 158 无头模式对比 20 ms 和 3 ms，每组 100 次，经典页和 SPA 各半。模拟开放到点击的中位数从 22.4 ms 降到 5.5 ms，P99 从 23.5 ms 降到 6.7 ms。3 ms 组最早在模拟开放后 4.0 ms 点击，每次均产生一次点击和一次本机回环请求。
 
-## 实测端到端结果（真实 CUSIS 环境）
+### 20 ms 缓冲的历史对照
 
-设定到点 12:24:30.000（HKT），脚本自动点击 Enroll：
+本机 Chrome 158 无头模式用同一套单次定时逻辑对比 80 ms 和 20 ms。每组 100 次，经典页和 SPA 各半。开放到点击的中位数从 82.4 ms 降到 22.6 ms，P99 从 86.4 ms 降到 23.4 ms。20 ms 组最早在模拟开放后 21.3 ms 点击。每个样本均产生一次点击和一次本机回环请求。
 
-```
-实际请求发出：12:24:30.102（+102ms）
-误差分解：检测滞后 ~22ms（50ms 轮询）+ 缓冲 80ms ≈ 理论 80~130ms 区间正中
-```
+### 80 ms 缓冲的历史对照
 
-验证方法（performance API，无需抓包）：
-```js
-var ns = performance.timeOrigin;
-performance.getEntriesByType("resource")
-  .filter(e => e.initiatorType === "xmlhttprequest")
-  .slice(-1).map(e => new Date(ns + e.startTime).toISOString())
-```
+本机 Chrome 158 无头模式对比 `be6f86d` 和初版单次定时。两版各跑 100 次，经典页和 SPA 各半，预约时间与模拟时钟一致，缓冲同为 80 ms。模拟 Enroll 按钮向本机回环地址发送带唯一标记的 XHR，按该请求的 `requestStart` 计时。
 
-## 测试方法要点
+| 指标 | 旧版中位数 | 新版中位数 | 旧版 P99 | 新版 P99 |
+| --- | ---: | ---: | ---: | ---: |
+| 预约时间到点击 | 106.8 ms | 82.1 ms | 133.0 ms | 84.1 ms |
+| 点击到浏览器发起请求 | 0.7 ms | 0.6 ms | 1.4 ms | 1.8 ms |
 
-- 选课未开放时点 Enroll，系统返回
-  `You do not have a valid enrollment appointment at this time`——这是
-  **正常拒绝**，正好用于安全测试完整流程（脚本点击成功 + 系统按计划拒绝）
-- 测试前用 `dialogAction` 传一个 30~60s 后的时间，观察等待日志 →
-  到点自动点击 → 系统响应，三步全验证
-- 2026 CUSIS 购物车页无 `DERIVED_REGFRM1_DETAILS_LINK`（旧版选择器失效），
-  课程列表+checkbox+按钮直接显示，脚本需跳过 Details 步骤
-- SPA 页（NUI_FRAMEWORK URL）与经典页（SSR_SHOP_CART_FL）元素结构相同，
-  仅 URL 不同——脚本 URL 判断需同时兼容两者
+初版单次定时最早在模拟开放后 80.7 ms 点击。200 个样本均触发一次浏览器点击和一次本机请求。
+
+## 校园网观察
+
+宿舍有有线 ResNet 时优先使用。在同一购物车标签页完成常规 Validate，等页面稳定。观察正常 Enroll 操作时，用 Chrome Network 面板按发起者找到对应请求，查看浏览器排队、DNS、连接和 TLS 握手。只有新建连接反复出现在提交路径上，才值得比较同源 `preconnect`。首字节时间还受网络往返和服务端处理影响。服务端的预约判定时间需要服务端记录。 [CUHK ResNet 建议](https://www.itsc.cuhk.edu.hk/sc/all-it/wifi-and-network/resnet/best-prac-resnet/) · [Chrome 网络计时](https://developer.chrome.com/docs/devtools/network/reference#timing-explanation)
+
+## 2026 年 8 月历史记录
+
+历史记录将这些 NTP 读数标为「本机减参考时钟」。原始输出和估计误差未留档，读数方向与当时连接路径待核实。
+
+| NTP 源 | 当时记录的读数 |
+| --- | --- |
+| `time.apple.com` ×3 | +0.068 / +0.069 / +0.067 s |
+| `time.google.com` | +0.046 s |
+| `time.nist.gov` | +0.042 s |
+| `hk.pool.ntp.org` | +0.048 s |
+
+一次真实 CUSIS 测试将脚本目标时间设为 `12:24:30.000 HKT`，最后一条 XHR 的浏览器资源起点为 `12:24:30.102 HKT`。该样本用的是 50 ms 轮询加 80 ms 缓冲。记录未将这条 XHR 与点击关联，也未记录服务端接收时间。

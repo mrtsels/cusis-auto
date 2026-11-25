@@ -106,26 +106,14 @@ prompt 对话框在 AppleScript 下会阻塞——需要用户手动输入时间
    ```js
    document.getElementById("log-overlay").innerText
    ```
-   期望序列：`The script starts.` → `Waiting for the registration time.
-   Current time: HH:MM:SS.mmm`（循环）→ `The script clicks the Enroll button.`
-2. **enroll.js 到点后**，页面应出现系统响应（成功提示或错误如
-   `You do not have a valid enrollment appointment`——后者=点击成功但选课
-   未开放，正常）。
-3. **精确核对实际请求时间**（可选，用户要求时）：
-   ```js
-   var ns = performance.timeOrigin;
-   performance.getEntriesByType("resource")
-     .filter(e => e.initiatorType === "xmlhttprequest")
-     .slice(-1).map(e => new Date(ns + e.startTime).toISOString())
-   ```
-   与设定时间对比，预期晚 80~130ms（缓冲 80 + 轮询滞后 ≤50）。
+   排程就绪后显示 `Scheduled to click Enroll at … HKT.`。切到后台或离开购物车页会撤销排程。重复注入时，已有排程继续生效。
+2. 到达排程时间后，浮层报告 Enroll 按钮的点击状态。选课是否成功以 CUSIS 页面回显为准。
+3. 用户要求核对网络计时时，从 Chrome Network 面板找出本次 Enroll 对应的请求，查看发起时间和 Timing 详情。浏览器计时只覆盖客户端可观察的阶段。
 
 ## 时间策略（enroll.js 内置，agent 不要改）
 
-- 轮询 50ms + 缓冲 80ms。缓冲覆盖本地时钟 NTP 偏移（实测 ~70ms），
-  保证点击严格晚于真实到点
-- 选课时间由用户提供或对话框默认值（当前 +2min）——agent 替用户决定时
-  用用户明确的开放时间，不要自己猜
+- 按预约开放时间加 3 ms 定时，适用于本机与 CUSIS 共用香港天文台授时的配置。 [计时与测试](references/timing-and-testing.md)
+- 输入按香港时间（UTC+08:00）解析。排程应使用用户明确提供的预约开放时间，准备就绪后保持购物车页在前台。
 
 ## 陷阱速查
 

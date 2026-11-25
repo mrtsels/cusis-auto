@@ -1,4 +1,19 @@
 (function () {
+  const pendingEnrollment = Symbol.for("cusis-auto.pendingEnrollment");
+  if (window[pendingEnrollment]) {
+    console.log("Enrollment is already scheduled in this tab.");
+    return;
+  }
+
+  const cartPage = "SSR_SHOP_CART_FL";
+  const cartUrl =
+    "https://cusis.cuhk.edu.hk/psc/CSPRD_newwin/EMPLOYEE/SA/c/SSR_STUDENT_FL.SSR_SHOP_CART_FL.GBL?Page=SSR_SHOP_CART_FL";
+  const checkboxSelector = ".ps-checkbox";
+  const enrollButtonId = "DERIVED_SSR_FL_SSR_ENROLL_FL";
+  const hktOffsetMs = 8 * 60 * 60 * 1000;
+  const clockBufferMs = 3; // The local and CUSIS clocks share the HKO time source.
+  const maxTimeoutMs = 2_147_483_647;
+
   // ===== Log overlay: fixed at the bottom of the screen =====
   let overlay = document.getElementById("log-overlay");
   if (!overlay) {
@@ -22,104 +37,191 @@
   // Display a message on the overlay. Show only the latest line.
   function logMessage(message) {
     console.log(message);
-    overlay.innerText = message;
+    overlay.textContent = message;
     overlay.style.display = "block";
-    overlay.scrollTop = overlay.scrollHeight;
   }
 
-  // Format the current time as HH:MM:SS.mmm
-  function getCurrentTime() {
-    const now = new Date();
-    const pad = (n) => String(n).padStart(2, "0");
-    return (
-      pad(now.getHours()) +
-      ":" +
-      pad(now.getMinutes()) +
-      ":" +
-      pad(now.getSeconds()) +
-      "." +
-      String(now.getMilliseconds()).padStart(3, "0")
-    );
+  function formatHkt(epochMs) {
+    return new Date(epochMs + hktOffsetMs).toISOString().slice(0, -1).replace("T", " ");
   }
 
-  const targetUrl =
-    "https://cusis.cuhk.edu.hk/psc/CSPRD_newwin/EMPLOYEE/SA/c/SSR_STUDENT_FL.SSR_SHOP_CART_FL.GBL?Page=SSR_SHOP_CART_FL";
+  function isEnabled(element) {
+    return element?.isConnected && !element.matches(':disabled, [disabled], [aria-disabled="true"]');
+  }
 
-  // URL check: support both CUSIS cart pages
-  // 1) Classic page: URL contains SSR_SHOP_CART_FL
-  // 2) SPA page (2026+): URL is NUI_FRAMEWORK and the cart component is rendered
-  const isClassicCart =
-    window.location.href.indexOf("SSR_STUDENT_FL.SSR_SHOP_CART_FL.GBL") !== -1 ||
-    window.location.href.indexOf("SSR_SHOP_CART_FL") !== -1;
+  const initialUrl = window.location.href;
   const isSpaCart =
-    window.location.href.indexOf("NUI_FRAMEWORK") !== -1 &&
-    (document.querySelectorAll(".ps-checkbox").length > 0 ||
-      document.querySelector("#DERIVED_SSR_FL_SSR_ENROLL_FL"));
+    initialUrl.includes("NUI_FRAMEWORK") &&
+    (document.title.includes("Shopping Cart") ||
+      document.querySelector(checkboxSelector) ||
+      document.getElementById(enrollButtonId));
 
-  if (!isClassicCart && !isSpaCart) {
+  if (!initialUrl.includes(cartPage) && !isSpaCart) {
     const userConfirm = window.confirm(
       "You are not on the CUHK Shopping Cart page. Do you want to be redirected?"
     );
     if (userConfirm) {
-      window.location.href = targetUrl;
+      window.location.href = cartUrl;
     } else {
       logMessage("You stay on the current page. The script exits.");
-      return; // Exit the script to prevent it from running
     }
-  } else {
-    // The 2026 CUSIS cart page has no Details link. The course list and buttons
-    // are visible directly. Click the Details link only if it still exists.
-    const detailsLink = document.querySelector("#DERIVED_REGFRM1_DETAILS_LINK");
-    if (detailsLink) {
-      try {
-        detailsLink.click();
-      } catch (e) {
-        logMessage("Cannot click the Details link: " + e.message);
-      }
-    }
-
-    const regtime = new Date(
-      Date.parse(
-        window.prompt(
-          "Enter the registration time (for example, 2026-08-10 10:00:00)",
-          new Date(Date.now() + 2 * 60 * 1000 + 8 * 60 * 60 * 1000)
-            .toISOString()
-            .replace(/T/, " ")
-            .replace(/\..+/, "")
-        )
-      )
-    );
-
-    logMessage("The script starts.");
-
-    setTimeout(() => {
-      document.querySelectorAll(".ps-checkbox").forEach((checkbox) => {
-        if (!checkbox.checked) checkbox.click();
-      });
-
-      const interval = setInterval(() => {
-        const currentTime = getCurrentTime();
-        if (regtime > new Date()) {
-          logMessage(`Waiting for the registration time. Current time: ${currentTime}`);
-        } else {
-          setTimeout(() => {
-            const enrollBtn = document.querySelector(
-              "#DERIVED_SSR_FL_SSR_ENROLL_FL"
-            );
-            if (!enrollBtn) {
-              logMessage("Error: Enroll button not found.");
-              return;
-            }
-            try {
-              enrollBtn.click();
-              logMessage("The script clicks the Enroll button.");
-            } catch (e) {
-              logMessage("Cannot click the Enroll button: " + e.message);
-            }
-          }, 80); // Buffer after detection: covers the ~70 ms system clock offset
-          clearInterval(interval);
-        }
-      }, 50); // Poll every 50 ms: detection lag is at most 50 ms
-    }, 2000); // Wait for 2 seconds before starting
+    return;
   }
+
+  const input = window.prompt(
+    "Enter the registration time in Hong Kong (UTC+08:00), e.g. 2026-08-10 10:00:00",
+    formatHkt(Date.now() + 120_000).slice(0, 19)
+  );
+  if (input === null) {
+    logMessage("Enrollment canceled.");
+    return;
+  }
+
+  const registrationTime = input.trim();
+  const hasDateFormat = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(registrationTime);
+  const openingMs = hasDateFormat ? Date.parse(registrationTime.replace(" ", "T") + "+08:00") : NaN;
+  if (!Number.isFinite(openingMs) || formatHkt(openingMs).slice(0, 19) !== registrationTime) {
+    logMessage("Invalid registration time. Enter a Hong Kong date and time as YYYY-MM-DD HH:MM:SS.");
+    return;
+  }
+  if (document.hidden) {
+    logMessage("Keep the Shopping Cart tab visible and run the script again.");
+    return;
+  }
+
+  // Anchor before cart preparation, which can span asynchronous page updates.
+  const sampleStart = performance.now();
+  const wallNow = Date.now();
+  const sampleEnd = performance.now();
+  if (openingMs <= wallNow) {
+    logMessage("The registration time has already passed.");
+    return;
+  }
+
+  const targetMs = openingMs + clockBufferMs;
+  const deadline = (sampleStart + sampleEnd) / 2 + (targetMs - wallNow);
+  let timer;
+  let cartReady = false;
+  let openedDetails = false;
+  const attemptedSelection = new Set();
+  const observer = new MutationObserver(prepareCart);
+
+  function finish() {
+    clearTimeout(timer);
+    observer.disconnect();
+    document.removeEventListener("change", onSelectionChange);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    window.removeEventListener("pagehide", onPageHide);
+    window.navigation?.removeEventListener("currententrychange", onNavigation);
+    delete window[pendingEnrollment];
+  }
+
+  function cancel(message) {
+    finish();
+    logMessage(message);
+  }
+
+  function onVisibilityChange() {
+    if (document.hidden) cancel("Enrollment canceled because the Shopping Cart tab was hidden.");
+  }
+
+  function onPageHide() {
+    cancel("Enrollment canceled because the Shopping Cart page was left.");
+  }
+
+  function onNavigation() {
+    if (window.location.href !== initialUrl) onPageHide();
+  }
+
+  function onSelectionChange(event) {
+    if (event.target.matches?.(checkboxSelector)) queueMicrotask(prepareCart);
+  }
+
+  function prepareCart() {
+    if (cartReady || window[pendingEnrollment] !== finish) return;
+
+    try {
+      const checkboxes = document.querySelectorAll(checkboxSelector);
+      if (checkboxes.length === 0 && !openedDetails) {
+        const details = document.getElementById("DERIVED_REGFRM1_DETAILS_LINK");
+        if (isEnabled(details)) {
+          openedDetails = true;
+          details.click();
+        }
+        return;
+      }
+
+      for (const checkbox of checkboxes) {
+        // A replacement control can appear before the cart acknowledges the selection.
+        const selectionKey = checkbox.id || checkbox;
+        if (isEnabled(checkbox) && !checkbox.checked && !attemptedSelection.has(selectionKey)) {
+          attemptedSelection.add(selectionKey);
+          checkbox.click();
+          if (window[pendingEnrollment] !== finish) return;
+        }
+      }
+
+      // Selecting courses can rerender the cart or enable the button.
+      const selectable = Array.from(document.querySelectorAll(checkboxSelector)).filter(isEnabled);
+      const allSelected = selectable.length > 0 && selectable.every((checkbox) => checkbox.checked);
+      if (!allSelected || !isEnabled(document.getElementById(enrollButtonId))) return;
+
+      cartReady = true;
+      observer.disconnect();
+      document.removeEventListener("change", onSelectionChange);
+      logMessage(`Scheduled to click Enroll at ${formatHkt(targetMs)} HKT.`);
+    } catch (error) {
+      cancel("Cannot prepare the Shopping Cart: " + error.message);
+    }
+  }
+
+  function scheduleTimer() {
+    const delay = Math.ceil(deadline - performance.now());
+    timer = setTimeout(clickWhenDue, Math.min(maxTimeoutMs, Math.max(0, delay)));
+  }
+
+  function clickWhenDue() {
+    if (performance.now() < deadline) {
+      scheduleTimer();
+      return;
+    }
+    if (document.hidden || window.location.href !== initialUrl) {
+      cancel("Enrollment canceled because the Shopping Cart is no longer active.");
+      return;
+    }
+    if (Date.now() < targetMs) {
+      cancel("The system clock moved backward. Check the clock and schedule enrollment again.");
+      return;
+    }
+
+    const enrollButton = document.getElementById(enrollButtonId);
+    const hasSelection = Array.from(document.querySelectorAll(`${checkboxSelector}:checked`)).some(isEnabled);
+    if (!cartReady || !hasSelection || !isEnabled(enrollButton)) {
+      cancel("The Shopping Cart was not ready at the scheduled time. Check the courses and Enroll button.");
+      return;
+    }
+
+    finish();
+    try {
+      enrollButton.click();
+      logMessage("The script clicks the Enroll button.");
+    } catch (error) {
+      logMessage("Cannot click the Enroll button: " + error.message);
+    }
+  }
+
+  window[pendingEnrollment] = finish;
+  document.addEventListener("change", onSelectionChange);
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  window.addEventListener("pagehide", onPageHide);
+  window.navigation?.addEventListener("currententrychange", onNavigation);
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["disabled", "aria-disabled", "checked", "class", "id"],
+  });
+  logMessage("Preparing the Shopping Cart.");
+  scheduleTimer();
+  prepareCart();
 })();
