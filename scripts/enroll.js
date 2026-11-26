@@ -12,6 +12,7 @@
   const enrollButtonId = "DERIVED_SSR_FL_SSR_ENROLL_FL";
   const hktOffsetMs = 8 * 60 * 60 * 1000;
   const clockBufferMs = 1; // The local and CUSIS clocks share the HKO time source.
+  const preflightLeadMs = 100;
   const maxTimeoutMs = 2_147_483_647;
 
   // ===== Log overlay: fixed at the bottom of the screen =====
@@ -100,16 +101,25 @@
 
   const targetMs = openingMs + clockBufferMs;
   const deadline = (sampleStart + sampleEnd) / 2 + (targetMs - wallNow);
+  const preflightDeadline = deadline - preflightLeadMs;
   let timer;
   let cartReady = false;
   let openedDetails = false;
+  let preflightStarted = false;
+  let preparedButton = null;
+  let preparedSelection = [];
+  let clickStarted = false;
   const attemptedSelection = new Set();
-  const observer = new MutationObserver(prepareCart);
+  const observer = new MutationObserver(onCartChange);
+
+  function stopWatchingCart() {
+    observer.disconnect();
+    document.removeEventListener("change", onSelectionChange);
+  }
 
   function finish() {
     clearTimeout(timer);
-    observer.disconnect();
-    document.removeEventListener("change", onSelectionChange);
+    stopWatchingCart();
     document.removeEventListener("visibilitychange", onVisibilityChange);
     window.removeEventListener("pagehide", onPageHide);
     window.navigation?.removeEventListener("currententrychange", onNavigation);
@@ -117,6 +127,7 @@
   }
 
   function cancel(message) {
+    if (clickStarted || window[pendingEnrollment] !== finish) return;
     finish();
     logMessage(message);
   }
@@ -134,7 +145,28 @@
   }
 
   function onSelectionChange(event) {
-    if (event.target.matches?.(checkboxSelector)) queueMicrotask(prepareCart);
+    if (event.target.matches?.(checkboxSelector)) queueMicrotask(onCartChange);
+  }
+
+  function watchCart() {
+    document.addEventListener("change", onSelectionChange);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["disabled", "aria-disabled", "checked", "class", "id"],
+    });
+  }
+
+  function onCartChange() {
+    if (window[pendingEnrollment] !== finish || clickStarted) return;
+    prepareCart();
+    if (!preflightStarted || window[pendingEnrollment] !== finish) return;
+
+    // Recheck on changes during the last 100 ms. The click timer uses these references.
+    const button = document.getElementById(enrollButtonId);
+    preparedSelection = Array.from(document.querySelectorAll(`${checkboxSelector}:checked`)).filter(isEnabled);
+    preparedButton = cartReady && preparedSelection.length > 0 && isEnabled(button) ? button : null;
   }
 
   function prepareCart() {
@@ -167,47 +199,62 @@
       if (!allSelected || !isEnabled(document.getElementById(enrollButtonId))) return;
 
       cartReady = true;
-      observer.disconnect();
-      document.removeEventListener("change", onSelectionChange);
+      if (!preflightStarted) stopWatchingCart();
       logMessage(`Scheduled to click Enroll at ${formatHkt(targetMs)} HKT.`);
     } catch (error) {
       cancel("Cannot prepare the Shopping Cart: " + error.message);
     }
   }
 
-  function scheduleTimer() {
-    const delay = Math.ceil(deadline - performance.now());
-    timer = setTimeout(clickWhenDue, Math.min(maxTimeoutMs, Math.max(0, delay)));
+  function scheduleAt(when, callback) {
+    const delay = Math.ceil(when - performance.now());
+    timer = setTimeout(callback, Math.min(maxTimeoutMs, Math.max(0, delay)));
+  }
+
+  function preflightWhenDue() {
+    if (performance.now() < preflightDeadline) {
+      scheduleAt(preflightDeadline, preflightWhenDue);
+      return;
+    }
+    preflightStarted = true;
+    watchCart();
+    onCartChange();
+    if (window[pendingEnrollment] === finish) scheduleAt(deadline, clickWhenDue);
   }
 
   function clickWhenDue() {
-    if (performance.now() < deadline) {
-      scheduleTimer();
+    const callbackAt = performance.now();
+    if (callbackAt < deadline) {
+      scheduleAt(deadline, clickWhenDue);
       return;
     }
     if (document.hidden || window.location.href !== initialUrl) {
       cancel("Enrollment canceled because the Shopping Cart is no longer active.");
       return;
     }
-    const enrollButton = document.getElementById(enrollButtonId);
-    const hasSelection = Array.from(document.querySelectorAll(`${checkboxSelector}:checked`)).some(isEnabled);
-    if (!cartReady || !hasSelection || !isEnabled(enrollButton)) {
+    // The checked property can change without a DOM mutation or a change event.
+    if (!preparedButton?.isConnected || !preparedSelection.some((checkbox) => checkbox.isConnected && checkbox.checked)) {
       cancel("The Shopping Cart was not ready at the scheduled time. Check the courses and Enroll button.");
       return;
     }
 
-    finish();
     const clickedAt = Date.now();
     if (clickedAt < targetMs) {
-      logMessage("The system clock moved backward. Check the clock and schedule enrollment again.");
+      cancel("The system clock moved backward. Check the clock and schedule enrollment again.");
       return;
     }
+    clickStarted = true;
+    const clickStart = performance.now();
     try {
-      enrollButton.click();
+      preparedButton.click();
     } catch (error) {
       logMessage("Cannot click the Enroll button: " + error.message);
       return;
+    } finally {
+      finish();
     }
+    console.log(`Enroll timing. Timer delay ${(callbackAt - deadline).toFixed(2)} ms. ` +
+      `Callback to click ${(clickStart - callbackAt).toFixed(2)} ms.`);
     logMessage(
       `The script clicks the Enroll button. ${formatHkt(clickedAt)} HKT ` +
       `(${clickedAt - openingMs} ms after opening, ${clickedAt - targetMs} ms after scheduled time).`
@@ -215,17 +262,11 @@
   }
 
   window[pendingEnrollment] = finish;
-  document.addEventListener("change", onSelectionChange);
   document.addEventListener("visibilitychange", onVisibilityChange);
   window.addEventListener("pagehide", onPageHide);
   window.navigation?.addEventListener("currententrychange", onNavigation);
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ["disabled", "aria-disabled", "checked", "class", "id"],
-  });
+  watchCart();
   logMessage("Preparing the Shopping Cart.");
-  scheduleTimer();
   prepareCart();
+  if (window[pendingEnrollment] === finish) preflightWhenDue();
 })();

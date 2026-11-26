@@ -8,6 +8,7 @@ const source = fs.readFileSync(path.join(__dirname, "../scripts/enroll.js"), "ut
 const opening = "2026-11-26 10:00:00";
 const openingMs = Date.parse("2026-11-26T10:00:00+08:00");
 const bufferMs = 1;
+const preflightMs = bufferMs - 100;
 const classic = "http://localhost/SSR_SHOP_CART_FL";
 const spa = "http://localhost/NUI_FRAMEWORK";
 const pendingKey = Symbol.for("cusis-auto.pendingEnrollment");
@@ -15,6 +16,7 @@ const pendingKey = Symbol.for("cusis-auto.pendingEnrollment");
 function fixture({ input = opening, url = classic, hasCart = true } = {}) {
   const state = { now: -500, clockShift: 0, prompts: 0, detailsClicks: 0, enrollClicks: [] };
   const messages = [];
+  const work = [];
   const overlay = { style: {}, textContent: "" };
   const checkbox = {
     isConnected: true,
@@ -26,7 +28,7 @@ function fixture({ input = opening, url = classic, hasCart = true } = {}) {
     isConnected: true,
     disabled: false,
     matches() { return this.disabled; },
-    click() { state.enrollClicks.push(state.now); },
+    click() { work.push("click"); state.enrollClicks.push(state.now); },
   };
   const details = {
     isConnected: !hasCart,
@@ -39,13 +41,18 @@ function fixture({ input = opening, url = classic, hasCart = true } = {}) {
     body: {},
     hidden: false,
     querySelector: () => courses[0] ?? null,
-    querySelectorAll: (selector) => selector.endsWith(":checked")
-      ? courses.filter((course) => course.checked) : courses,
-    getElementById: (id) => ({
-      "log-overlay": overlay,
-      DERIVED_SSR_FL_SSR_ENROLL_FL: enroll,
-      DERIVED_REGFRM1_DETAILS_LINK: details,
-    })[id] ?? null,
+    querySelectorAll(selector) {
+      work.push("query");
+      return selector.endsWith(":checked") ? courses.filter((course) => course.checked) : courses;
+    },
+    getElementById(id) {
+      work.push("lookup");
+      return ({
+        "log-overlay": overlay,
+        DERIVED_SSR_FL_SSR_ENROLL_FL: enroll,
+        DERIVED_REGFRM1_DETAILS_LINK: details,
+      })[id] ?? null;
+    },
   });
   const window = Object.assign(new EventTarget(), {
     location: { href: url },
@@ -63,11 +70,12 @@ function fixture({ input = opening, url = classic, hasCart = true } = {}) {
     document,
     Date: Clock,
     console: { log: (message) => messages.push(message) },
+    queueMicrotask,
     performance: { now: () => 10_000 + state.now },
     MutationObserver: class {
       constructor(callback) { this.callback = callback; }
       observe() { observers.add(this.callback); }
-      disconnect() { observers.delete(this.callback); }
+      disconnect() { work.push("cleanup"); observers.delete(this.callback); }
     },
     setTimeout(callback, delay) {
       const id = ++nextTimer;
@@ -78,12 +86,15 @@ function fixture({ input = opening, url = classic, hasCart = true } = {}) {
   });
 
   return {
-    state, document, window, overlay, checkbox, enroll, timers, observers, messages,
+    state, document, window, overlay, checkbox, enroll, timers, observers, messages, work,
     start() { vm.runInContext(source, context); },
     advanceTo(time) {
       state.now = time;
-      for (const [id, timer] of [...timers]) {
-        if (timer.at <= time && timers.delete(id)) timer.callback();
+      while (timers.size > 0) {
+        const [id, next] = Array.from(timers).sort((a, b) => a[1].at - b[1].at)[0];
+        if (next.at > state.now) break;
+        timers.delete(id);
+        next.callback();
       }
     },
     fireTimerEarly(time) {
@@ -131,9 +142,36 @@ test("repeated injection and a late timer cause one immediate click when the cal
   page.start();
   assert.equal(page.state.prompts, 1);
   assert.equal(page.timers.size, 1);
+  page.advanceTo(preflightMs);
   page.advanceTo(250);
   assert.deepEqual(page.state.enrollClicks, [250]);
   assert.equal(page.timers.size, 0);
+  assert(page.messages.includes("Enroll timing. Timer delay 249.00 ms. Callback to click 0.00 ms."));
+});
+
+test("the last cart scan is 100 ms early and there is no lookup or cleanup before the final click", () => {
+  const page = fixture();
+  page.start();
+  page.work.length = 0;
+  page.advanceTo(preflightMs - 1);
+  assert.deepEqual(page.work, []);
+  page.advanceTo(preflightMs);
+  assert.deepEqual(page.work, ["lookup", "query"]);
+  page.work.length = 0;
+  page.advanceTo(bufferMs);
+  assert.deepEqual(page.work, ["click", "cleanup"]);
+});
+
+test("the cart can finish preparing between preflight and the click", () => {
+  const page = fixture({ hasCart: false });
+  page.enroll.disabled = true;
+  page.start();
+  page.advanceTo(preflightMs);
+  page.advanceTo(-50);
+  page.enroll.disabled = false;
+  page.renderCart();
+  page.advanceTo(bufferMs);
+  assert.deepEqual(page.state.enrollClicks, [bufferMs]);
 });
 
 test("the overlay and console show the actual click time before the button handler runs", () => {
@@ -201,6 +239,7 @@ test("losing visibility, leaving the page or changing SPA routes cancels the tas
   for (const signal of signals) {
     const page = fixture({ url: spa });
     page.start();
+    page.advanceTo(preflightMs);
     signal(page);
     page.advanceTo(500);
     assert.deepEqual(page.state.enrollClicks, []);
@@ -212,6 +251,7 @@ test("losing visibility, leaving the page or changing SPA routes cancels the tas
 test("an early callback and forward clock jump are still gated by the original deadline", () => {
   const page = fixture();
   page.start();
+  page.advanceTo(preflightMs);
   page.state.clockShift = 350;
   page.fireTimerEarly(bufferMs - 1);
   assert.deepEqual(page.state.enrollClicks, []);
@@ -229,16 +269,17 @@ test("a local clock fast by the buffer still clicks at opening", () => {
   assert.deepEqual(page.state.enrollClicks, [0]);
 });
 
-test("a backward clock jump or stale cart state blocks the scheduled click", () => {
+test("a backward clock jump or stale cart state after preflight blocks the click", () => {
   const changes = [
     (page) => { page.state.clockShift = -350; },
-    (page) => { page.enroll.disabled = true; },
+    (page) => { page.enroll.disabled = true; page.renderCart(); },
     (page) => { page.enroll.isConnected = false; },
     (page) => { page.checkbox.checked = false; },
   ];
   for (const change of changes) {
     const page = fixture();
     page.start();
+    page.advanceTo(preflightMs);
     change(page);
     page.advanceTo(bufferMs);
     page.advanceTo(500);
