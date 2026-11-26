@@ -4,7 +4,7 @@
 
 本机与 CUSIS 共用香港天文台授时，`enroll.js` 将**预约开放时间 + 1 ms** 换算成单调时钟上的截止点。单调时钟用于计时，系统改时间时它会继续向前运行。计划点击前 **100 ms** 复核购物车并缓存 Enroll 按钮。期间购物车发生变化时更新缓存。到点时核对时间和缓存控件是否仍有效，直接调用按钮，清理与日志放到点击之后。
 
-Console 中 `Enroll timing` 的 `Timer delay` 是计划时刻到定时回调入口的差值，`Callback to click` 是从回调入口到调用按钮的差值。两项都用 `performance.now()` 计时。
+`Clicked` 日志显示实际点击的香港时间，精确到毫秒。`open` 和 `plan` 分别记录点击比预约开放和计划点击晚了多久。`timer` 是回调比计划时间晚了多久，`to click` 是回调开始到点击的耗时。后两项都用 `performance.now()` 计时。
 
 macOS 可用 `sntp stdtime.gov.hk` 只读复核本机时钟偏差。记录采样时间、原始输出及工具提供的往返延迟和测量不确定度。比较历史读数时，统一用「本机减参考时钟」表示偏差，正数表示本机快。 [香港天文台授时服务](https://www.hko.gov.hk/en/nts/ntime.htm) · [NTPv4 规范](https://www.rfc-editor.org/rfc/rfc5905.html#section-8)
 

@@ -1,7 +1,7 @@
 (function () {
   const pendingEnrollment = Symbol.for("cusis-auto.pendingEnrollment");
   if (window[pendingEnrollment]) {
-    console.log("Enrollment is already scheduled in this tab.");
+    console.log("Already scheduled in this tab.");
     return;
   }
 
@@ -64,7 +64,7 @@
     if (userConfirm) {
       window.location.href = cartUrl;
     } else {
-      logMessage("You stay on the current page. The script exits.");
+      logMessage("Canceled.");
     }
     return;
   }
@@ -74,7 +74,7 @@
     formatHkt(Date.now() + 120_000).slice(0, 19)
   );
   if (input === null) {
-    logMessage("Enrollment canceled.");
+    logMessage("Canceled.");
     return;
   }
 
@@ -82,11 +82,11 @@
   const hasDateFormat = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(registrationTime);
   const openingMs = hasDateFormat ? Date.parse(registrationTime.replace(" ", "T") + "+08:00") : NaN;
   if (!Number.isFinite(openingMs) || formatHkt(openingMs).slice(0, 19) !== registrationTime) {
-    logMessage("Invalid registration time. Enter a Hong Kong date and time as YYYY-MM-DD HH:MM:SS.");
+    logMessage("Invalid time. Use HKT YYYY-MM-DD HH:MM:SS.");
     return;
   }
   if (document.hidden) {
-    logMessage("Keep the Shopping Cart tab visible and run the script again.");
+    logMessage("Show the Shopping Cart tab and rerun.");
     return;
   }
 
@@ -95,7 +95,7 @@
   const wallNow = Date.now();
   const sampleEnd = performance.now();
   if (openingMs <= wallNow) {
-    logMessage("The registration time has already passed.");
+    logMessage("Registration time has passed.");
     return;
   }
 
@@ -133,11 +133,11 @@
   }
 
   function onVisibilityChange() {
-    if (document.hidden) cancel("Enrollment canceled because the Shopping Cart tab was hidden.");
+    if (document.hidden) cancel("Canceled (cart tab hidden).");
   }
 
   function onPageHide() {
-    cancel("Enrollment canceled because the Shopping Cart page was left.");
+    cancel("Canceled (left cart).");
   }
 
   function onNavigation() {
@@ -200,9 +200,9 @@
 
       cartReady = true;
       if (!preflightStarted) stopWatchingCart();
-      logMessage(`Scheduled to click Enroll at ${formatHkt(targetMs)} HKT.`);
+      logMessage(`Scheduled ${formatHkt(targetMs)} HKT`);
     } catch (error) {
-      cancel("Cannot prepare the Shopping Cart: " + error.message);
+      cancel("Cart setup failed. " + error.message);
     }
   }
 
@@ -229,18 +229,18 @@
       return;
     }
     if (document.hidden || window.location.href !== initialUrl) {
-      cancel("Enrollment canceled because the Shopping Cart is no longer active.");
+      cancel("Canceled (cart inactive).");
       return;
     }
     // The checked property can change without a DOM mutation or a change event.
     if (!preparedButton?.isConnected || !preparedSelection.some((checkbox) => checkbox.isConnected && checkbox.checked)) {
-      cancel("The Shopping Cart was not ready at the scheduled time. Check the courses and Enroll button.");
+      cancel("Canceled. Check course selection and Enroll.");
       return;
     }
 
     const clickedAt = Date.now();
     if (clickedAt < targetMs) {
-      cancel("The system clock moved backward. Check the clock and schedule enrollment again.");
+      cancel("Clock moved backward. Check time and rerun.");
       return;
     }
     clickStarted = true;
@@ -248,16 +248,16 @@
     try {
       preparedButton.click();
     } catch (error) {
-      logMessage("Cannot click the Enroll button: " + error.message);
+      logMessage("Enroll click failed. " + error.message);
       return;
     } finally {
       finish();
     }
-    console.log(`Enroll timing. Timer delay ${(callbackAt - deadline).toFixed(2)} ms. ` +
-      `Callback to click ${(clickStart - callbackAt).toFixed(2)} ms.`);
+    const timerDelay = (callbackAt - deadline).toFixed(2);
+    const callbackToClick = (clickStart - callbackAt).toFixed(2);
     logMessage(
-      `The script clicks the Enroll button. ${formatHkt(clickedAt)} HKT ` +
-      `(${clickedAt - openingMs} ms after opening, ${clickedAt - targetMs} ms after scheduled time).`
+      `Clicked ${formatHkt(clickedAt)} HKT | open +${clickedAt - openingMs} ms | ` +
+      `plan +${clickedAt - targetMs} ms | timer +${timerDelay} ms | to click ${callbackToClick} ms`
     );
   }
 
@@ -266,7 +266,7 @@
   window.addEventListener("pagehide", onPageHide);
   window.navigation?.addEventListener("currententrychange", onNavigation);
   watchCart();
-  logMessage("Preparing the Shopping Cart.");
+  logMessage("Preparing cart.");
   prepareCart();
   if (window[pendingEnrollment] === finish) preflightWhenDue();
 })();

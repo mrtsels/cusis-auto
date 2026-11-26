@@ -146,7 +146,8 @@ test("repeated injection and a late timer cause one immediate click when the cal
   page.advanceTo(250);
   assert.deepEqual(page.state.enrollClicks, [250]);
   assert.equal(page.timers.size, 0);
-  assert(page.messages.includes("Enroll timing. Timer delay 249.00 ms. Callback to click 0.00 ms."));
+  assert.equal(page.messages.at(-1),
+    "Clicked 2026-11-26 10:00:00.250 HKT | open +250 ms | plan +249 ms | timer +249.00 ms | to click 0.00 ms");
 });
 
 test("the last cart scan is 100 ms early and there is no lookup or cleanup before the final click", () => {
@@ -174,7 +175,7 @@ test("the cart can finish preparing between preflight and the click", () => {
   assert.deepEqual(page.state.enrollClicks, [bufferMs]);
 });
 
-test("the overlay and console show the actual click time before the button handler runs", () => {
+test("the overlay and console share one log with the time captured before the click handler", () => {
   const page = fixture();
   const click = page.enroll.click;
   page.enroll.click = () => {
@@ -182,14 +183,15 @@ test("the overlay and console show the actual click time before the button handl
     page.state.now += 100;
   };
   page.start();
+  assert.equal(page.overlay.textContent, "Scheduled 2026-11-26 10:00:00.001 HKT");
+  const messageCount = page.messages.length;
   page.advanceTo(7);
   assert.deepEqual(page.state.enrollClicks, [7]);
   assert.equal(
     page.overlay.textContent,
-    "The script clicks the Enroll button. 2026-11-26 10:00:00.007 HKT " +
-    "(7 ms after opening, 6 ms after scheduled time)."
+    "Clicked 2026-11-26 10:00:00.007 HKT | open +7 ms | plan +6 ms | timer +6.00 ms | to click 0.00 ms"
   );
-  assert.equal(page.messages.at(-1), page.overlay.textContent);
+  assert.deepEqual(page.messages.slice(messageCount), [page.overlay.textContent]);
 });
 
 test("legacy Details opens once and later cart mutations finish preparation", () => {
@@ -244,7 +246,7 @@ test("losing visibility, leaving the page or changing SPA routes cancels the tas
     page.advanceTo(500);
     assert.deepEqual(page.state.enrollClicks, []);
     assert.equal(page.window[pendingKey], undefined);
-    assert.match(page.overlay.textContent, /canceled/);
+    assert.match(page.overlay.textContent, /^Canceled\b/);
   }
 });
 
