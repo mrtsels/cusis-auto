@@ -107,7 +107,7 @@ prompt 对话框在 AppleScript 下会阻塞——需要用户手动输入时间
    document.getElementById("log-overlay").innerText
    ```
    排程就绪后显示 `Scheduled … HKT`。切到后台或离开购物车页会撤销排程。重复注入时，已有排程继续生效。
-2. 点击后，浮层和 Console 都显示同一条 `Clicked` 日志，包含实际点击时间和延迟。选课结果以 CUSIS 页面回显为准。
+2. 点击后，浮层显示实际点击时间和延迟。收到响应后，浮层和 Console 的 `Clicked` 日志会附上 `server` 时间。选课结果以 CUSIS 页面回显为准。
 3. 用户要求核对网络计时时，从 Chrome Network 面板找出本次 Enroll 对应的请求，查看发起时间和 Timing 详情。浏览器计时只覆盖客户端可观察的阶段。
 
 ## 时间策略（enroll.js 内置，agent 不要改）

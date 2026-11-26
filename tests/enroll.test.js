@@ -69,6 +69,7 @@ function fixture({ input = opening, url = classic, hasCart = true } = {}) {
     window,
     document,
     Date: Clock,
+    URL,
     console: { log: (message) => messages.push(message) },
     queueMicrotask,
     performance: { now: () => 10_000 + state.now },
@@ -192,6 +193,84 @@ test("the overlay and console share one log with the time captured before the cl
     "Clicked 2026-11-26 10:00:00.007 HKT | open +7 ms | plan +6 ms | timer +6.00 ms | to click 0.00 ms"
   );
   assert.deepEqual(page.messages.slice(messageCount), [page.overlay.textContent]);
+});
+
+test("the clicked cart request adds only its Date header to the final log", () => {
+  const page = fixture();
+  class CartRequest extends EventTarget {
+    static HEADERS_RECEIVED = 2;
+    readyState = 1;
+    open(method, url) { this.responseURL = new URL(url, classic).href; }
+    receiveHeaders() {
+      this.readyState = CartRequest.HEADERS_RECEIVED;
+      this.dispatchEvent(new Event("readystatechange"));
+    }
+    getResponseHeader(name) {
+      assert.equal(name, "Date");
+      return "Thu, 26 Nov 2026 02:00:01 GMT";
+    }
+  }
+  const originalOpen = CartRequest.prototype.open;
+  page.window.XMLHttpRequest = CartRequest;
+  page.enroll.form = { action: "http://localhost/cart-submit" };
+  const otherRequest = new CartRequest();
+  const enrollmentRequest = new CartRequest();
+  const click = page.enroll.click;
+  page.enroll.click = () => {
+    click();
+    otherRequest.open("POST", "/background");
+    enrollmentRequest.open("POST", "/cart-submit");
+  };
+
+  page.start();
+  page.advanceTo(preflightMs);
+  otherRequest.open("POST", "/cart-submit");
+  otherRequest.receiveHeaders();
+  page.advanceTo(bufferMs);
+  assert.deepEqual(page.state.enrollClicks, [bufferMs]);
+  assert.match(page.overlay.textContent, /^Clicked /);
+  const count = page.messages.length;
+  otherRequest.receiveHeaders();
+  assert.equal(page.messages.length, count);
+  enrollmentRequest.receiveHeaders();
+  assert.deepEqual(page.messages.slice(count), [page.overlay.textContent]);
+  assert.match(page.overlay.textContent, /\| server 2026-11-26 10:00:01 HKT$/);
+  assert.equal(CartRequest.prototype.open, originalOpen);
+  assert.equal(page.timers.size, 0);
+});
+
+test("a fetch response supplies the server time and keeps the original promise", async () => {
+  const page = fixture();
+  let resolveResponse;
+  const promise = new Promise((resolve) => { resolveResponse = resolve; });
+  const originalFetch = () => promise;
+  page.window.fetch = originalFetch;
+  const click = page.enroll.click;
+  page.enroll.click = () => {
+    click();
+    assert.equal(page.window.fetch(classic, { method: "POST" }), promise);
+  };
+  page.start();
+  page.advanceTo(bufferMs);
+  resolveResponse({ url: classic, headers: new Headers({ Date: "Thu, 26 Nov 2026 02:00:01 GMT" }) });
+  await promise;
+  assert.match(page.overlay.textContent, /\| server 2026-11-26 10:00:01 HKT$/);
+  assert.equal(page.messages.at(-1), page.overlay.textContent);
+  assert.equal(page.window.fetch, originalFetch);
+});
+
+test("a missing response ends observation and preserves the click log", () => {
+  const page = fixture();
+  const originalFetch = () => assert.fail("The script should not issue a request for the time");
+  page.window.fetch = originalFetch;
+  page.start();
+  page.advanceTo(bufferMs);
+  assert.match(page.overlay.textContent, /^Clicked /);
+  page.advanceTo(10_001);
+  assert.match(page.overlay.textContent, /\| server n\/a$/);
+  assert.equal(page.messages.at(-1), page.overlay.textContent);
+  assert.equal(page.window.fetch, originalFetch);
+  assert.equal(page.timers.size, 0);
 });
 
 test("legacy Details opens once and later cart mutations finish preparation", () => {

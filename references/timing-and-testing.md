@@ -6,6 +6,8 @@
 
 `Clicked` 日志显示实际点击的香港时间，精确到毫秒。`open` 和 `plan` 分别记录点击比预约开放和计划点击晚了多久。`timer` 是回调比计划时间晚了多久，`to click` 是回调开始到点击的耗时。后两项都用 `performance.now()` 计时。
 
+`server` 取自同源选课响应的 HTTP `Date`，按香港时间显示到秒。脚本观察点击后发往表单地址的 POST。没有表单时，按当前页面路径匹配。缺少可读的 `Date` 或 10 秒内没有匹配的响应时，日志显示 `server n/a`。 [HTTP Date 规范](https://www.rfc-editor.org/rfc/rfc9110.html#section-6.6.1)
+
 macOS 可用 `sntp stdtime.gov.hk` 只读复核本机时钟偏差。记录采样时间、原始输出及工具提供的往返延迟和测量不确定度。比较历史读数时，统一用「本机减参考时钟」表示偏差，正数表示本机快。 [香港天文台授时服务](https://www.hko.gov.hk/en/nts/ntime.htm) · [NTPv4 规范](https://www.rfc-editor.org/rfc/rfc5905.html#section-8)
 
 ## 本地测试
