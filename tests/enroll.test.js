@@ -7,7 +7,7 @@ const vm = require("node:vm");
 const source = fs.readFileSync(path.join(__dirname, "../scripts/enroll.js"), "utf8");
 const opening = "2026-11-26 10:00:00";
 const openingMs = Date.parse("2026-11-26T10:00:00+08:00");
-const bufferMs = 3;
+const bufferMs = 1;
 const classic = "http://localhost/SSR_SHOP_CART_FL";
 const spa = "http://localhost/NUI_FRAMEWORK";
 const pendingKey = Symbol.for("cusis-auto.pendingEnrollment");
@@ -104,7 +104,7 @@ test("classic and SPA carts are ready immediately and click once at the HKT targ
     const page = fixture({ url });
     page.start();
     assert.equal(page.checkbox.checked, true);
-    assert.match(page.overlay.textContent, /10:00:00\.003 HKT/);
+    assert.match(page.overlay.textContent, /10:00:00\.001 HKT/);
     page.advanceTo(bufferMs - 1);
     assert.deepEqual(page.state.enrollClicks, []);
     page.advanceTo(bufferMs);
@@ -149,7 +149,7 @@ test("the overlay and console show the actual click time before the button handl
   assert.equal(
     page.overlay.textContent,
     "The script clicks the Enroll button. 2026-11-26 10:00:00.007 HKT " +
-    "(7 ms after opening, 4 ms after scheduled time)."
+    "(7 ms after opening, 6 ms after scheduled time)."
   );
   assert.equal(page.messages.at(-1), page.overlay.textContent);
 });

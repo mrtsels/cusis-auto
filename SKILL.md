@@ -112,7 +112,7 @@ prompt 对话框在 AppleScript 下会阻塞——需要用户手动输入时间
 
 ## 时间策略（enroll.js 内置，agent 不要改）
 
-- 按预约开放时间加 3 ms 定时，适用于本机与 CUSIS 共用香港天文台授时的配置。 [计时与测试](references/timing-and-testing.md)
+- 按预约开放时间加 1 ms 定时，适用于本机与 CUSIS 共用香港天文台授时的配置。 [计时与测试](references/timing-and-testing.md)
 - 输入按香港时间（UTC+08:00）解析。排程应使用用户明确提供的预约开放时间，准备就绪后保持购物车页在前台。
 
 ## 陷阱速查

@@ -11,7 +11,7 @@
   const checkboxSelector = ".ps-checkbox";
   const enrollButtonId = "DERIVED_SSR_FL_SSR_ENROLL_FL";
   const hktOffsetMs = 8 * 60 * 60 * 1000;
-  const clockBufferMs = 3; // The local and CUSIS clocks share the HKO time source.
+  const clockBufferMs = 1; // The local and CUSIS clocks share the HKO time source.
   const maxTimeoutMs = 2_147_483_647;
 
   // ===== Log overlay: fixed at the bottom of the screen =====
