@@ -14,6 +14,7 @@ const pendingKey = Symbol.for("cusis-auto.pendingEnrollment");
 
 function fixture({ input = opening, url = classic, hasCart = true } = {}) {
   const state = { now: -500, clockShift: 0, prompts: 0, detailsClicks: 0, enrollClicks: [] };
+  const messages = [];
   const overlay = { style: {}, textContent: "" };
   const checkbox = {
     isConnected: true,
@@ -61,7 +62,7 @@ function fixture({ input = opening, url = classic, hasCart = true } = {}) {
     window,
     document,
     Date: Clock,
-    console: { log() {} },
+    console: { log: (message) => messages.push(message) },
     performance: { now: () => 10_000 + state.now },
     MutationObserver: class {
       constructor(callback) { this.callback = callback; }
@@ -77,7 +78,7 @@ function fixture({ input = opening, url = classic, hasCart = true } = {}) {
   });
 
   return {
-    state, document, window, overlay, checkbox, enroll, timers, observers,
+    state, document, window, overlay, checkbox, enroll, timers, observers, messages,
     start() { vm.runInContext(source, context); },
     advanceTo(time) {
       state.now = time;
@@ -133,6 +134,24 @@ test("repeated injection and a late timer cause one immediate click when the cal
   page.advanceTo(250);
   assert.deepEqual(page.state.enrollClicks, [250]);
   assert.equal(page.timers.size, 0);
+});
+
+test("the overlay and console show the actual click time before the button handler runs", () => {
+  const page = fixture();
+  const click = page.enroll.click;
+  page.enroll.click = () => {
+    click();
+    page.state.now += 100;
+  };
+  page.start();
+  page.advanceTo(7);
+  assert.deepEqual(page.state.enrollClicks, [7]);
+  assert.equal(
+    page.overlay.textContent,
+    "The script clicks the Enroll button. 2026-11-26 10:00:00.007 HKT " +
+    "(7 ms after opening, 4 ms after scheduled time)."
+  );
+  assert.equal(page.messages.at(-1), page.overlay.textContent);
 });
 
 test("legacy Details opens once and later cart mutations finish preparation", () => {

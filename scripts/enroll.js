@@ -189,11 +189,6 @@
       cancel("Enrollment canceled because the Shopping Cart is no longer active.");
       return;
     }
-    if (Date.now() < targetMs) {
-      cancel("The system clock moved backward. Check the clock and schedule enrollment again.");
-      return;
-    }
-
     const enrollButton = document.getElementById(enrollButtonId);
     const hasSelection = Array.from(document.querySelectorAll(`${checkboxSelector}:checked`)).some(isEnabled);
     if (!cartReady || !hasSelection || !isEnabled(enrollButton)) {
@@ -202,12 +197,21 @@
     }
 
     finish();
+    const clickedAt = Date.now();
+    if (clickedAt < targetMs) {
+      logMessage("The system clock moved backward. Check the clock and schedule enrollment again.");
+      return;
+    }
     try {
       enrollButton.click();
-      logMessage("The script clicks the Enroll button.");
     } catch (error) {
       logMessage("Cannot click the Enroll button: " + error.message);
+      return;
     }
+    logMessage(
+      `The script clicks the Enroll button. ${formatHkt(clickedAt)} HKT ` +
+      `(${clickedAt - openingMs} ms after opening, ${clickedAt - targetMs} ms after scheduled time).`
+    );
   }
 
   window[pendingEnrollment] = finish;
